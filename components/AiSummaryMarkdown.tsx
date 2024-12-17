@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { ArrowLeft, Send } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { AiThinkingLoader } from "./AiThinkingLoader";
 
 interface AiSummaryMarkdownProps {
   initialContent: string;
@@ -26,13 +25,13 @@ export function AiSummaryMarkdown({
 }: AiSummaryMarkdownProps) {
   const [summary, setSummary] = useState("");
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chatHistory, setChatHistory] = useState<
-    Array<{ role: string; content: string }>
+    Array<{ role: string; content: string; isLoading?: boolean }>
   >([]);
 
-  console.log(summary)
+  console.log(summary, error);
 
   useEffect(() => {
     fetchInitialSummary();
@@ -41,6 +40,14 @@ export function AiSummaryMarkdown({
   const fetchInitialSummary = async () => {
     setIsLoading(true);
     setError(null);
+
+    setChatHistory([
+      {
+        role: "assistant",
+        content: "Assistant is thinking...",
+        isLoading: true,
+      },
+    ]);
 
     try {
       const response = await fetch(
@@ -78,17 +85,18 @@ export function AiSummaryMarkdown({
         {
           role: "assistant",
           content: assistantContent,
+          isLoading: false,
         },
       ]);
     } catch (error) {
       console.error("Error fetching AI summary:", error);
       setError("Failed to fetch AI summary. Please try again.");
 
-      // Set error in chat history
       setChatHistory([
         {
           role: "assistant",
           content: "Failed to fetch AI summary. Please try again.",
+          isLoading: false,
         },
       ]);
     } finally {
@@ -106,7 +114,14 @@ export function AiSummaryMarkdown({
     const updatedChatHistory = [
       ...chatHistory,
       { role: "user", content: input },
+      {
+        role: "assistant",
+        content: "Assistant is thinking...",
+        isLoading: true,
+      },
     ];
+    setChatHistory(updatedChatHistory);
+    setInput("");
 
     try {
       const response = await fetch(
@@ -145,19 +160,19 @@ export function AiSummaryMarkdown({
 
       setSummary(assistantContent);
       setChatHistory([
-        ...updatedChatHistory,
-        { role: "assistant", content: assistantContent },
+        ...updatedChatHistory.slice(0, -1),
+        { role: "assistant", content: assistantContent, isLoading: false },
       ]);
-      setInput("");
     } catch (error) {
       console.error("Error fetching AI response:", error);
       setError("Failed to fetch AI response. Please try again.");
 
       setChatHistory([
-        ...updatedChatHistory,
+        ...updatedChatHistory.slice(0, -1),
         {
           role: "assistant",
           content: "Failed to fetch AI response. Please try again.",
+          isLoading: false,
         },
       ]);
     } finally {
@@ -178,49 +193,45 @@ export function AiSummaryMarkdown({
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
-        {isLoading ? (
-          <AiThinkingLoader />
-        ) : error ? (
-          <div className="text-center text-red-500">{error}</div>
-        ) : (
-          <>
-            <div className="h-[calc(100vh-350px)] overflow-y-auto">
-              {chatHistory.map((message, index) => (
-                <div
-                  key={index}
-                  className={`mb-4 ${
-                    message.role === "user" ? "text-right" : "text-left"
-                  }`}
-                >
-                  <div
-                    className={`inline-block p-2 rounded-lg ${
-                      message.role === "user" ? "bg-blue-100" : "bg-gray-100"
-                    }`}
+        <div className="h-[calc(100vh-350px)] overflow-y-auto">
+          {chatHistory.map((message, index) => (
+            <div
+              key={index}
+              className={`mb-4 ${
+                message.role === "user" ? "text-right" : "text-left"
+              }`}
+            >
+              <div
+                className={`inline-block p-2 rounded-lg ${
+                  message.role === "user" ? "bg-blue-100" : "bg-gray-100"
+                }`}
+              >
+                {message.isLoading ? (
+                  <div className="animate-pulse">Assistant is thinking...</div>
+                ) : (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    className="prose w-full"
                   >
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      className="prose w-full"
-                    >
-                      {message.content}
-                    </ReactMarkdown>
-                  </div>
-                </div>
-              ))}
+                    {message.content}
+                  </ReactMarkdown>
+                )}
+              </div>
             </div>
-            <form onSubmit={handleSubmit} className="flex items-center gap-2">
-              <Input
-                type="text"
-                placeholder="Ask a question..."
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                className="flex-grow"
-              />
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Sending..." : <Send className="w-4 h-4" />}
-              </Button>
-            </form>
-          </>
-        )}
+          ))}
+        </div>
+        <form onSubmit={handleSubmit} className="flex items-center gap-2">
+          <Input
+            type="text"
+            placeholder="Ask a question..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            className="flex-grow outline-none"
+          />
+          <Button type="submit" disabled={isLoading}>
+            <Send className="w-4 h-4" />
+          </Button>
+        </form>
       </CardContent>
     </Card>
   );
